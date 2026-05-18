@@ -1,0 +1,1 @@
+ALTER TABLE public.processes ADD COLUMN distribution_date date NULL;
