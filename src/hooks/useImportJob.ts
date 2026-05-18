@@ -88,7 +88,6 @@ export function useImportJob() {
 
       if (result.phase === 'consolidating') {
         setState(prev => ({ ...prev, phase: 'consolidating', progress: 80 }));
-        // Trigger consolidation
         const consolidateResult = await callEdgeFunction({ action: 'consolidate', importJobId: jobId });
 
         if (consolidateResult.phase === 'completed') {
@@ -110,7 +109,6 @@ export function useImportJob() {
       }
     } catch (err: any) {
       console.error('Batch processing error:', err);
-      // Don't fail the whole job on a single batch error - retry on next poll
       setState(prev => ({
         ...prev,
         error: `Erro no lote: ${err.message}. Retentando...`,
@@ -120,12 +118,9 @@ export function useImportJob() {
 
   const startPolling = useCallback((jobId: string) => {
     stopPolling();
-
-    // Immediately process first batch
     processNextBatch(jobId);
 
     pollingRef.current = setInterval(async () => {
-      // Check job status from DB
       const { data: job } = await supabase
         .from('import_jobs')
         .select('phase, chunks_processed, total_chunks, status, error_message, result_json')
@@ -161,7 +156,6 @@ export function useImportJob() {
         return;
       }
 
-      // If still analyzing chunks, trigger next batch
       if (job.phase === 'analyzing_chunks' && (job.chunks_processed || 0) < (job.total_chunks || 0)) {
         setState(prev => ({
           ...prev,
@@ -198,56 +192,48 @@ export function useImportJob() {
       ...prev,
       fileName: file.name,
       dialogOpen: true,
-      phase: 'uploading',
+      // PDFs skip the upload phase entirely — go straight to extraction
+      phase: isPdf ? 'extracting' : 'uploading',
       progress: 5,
       error: null,
       resultData: null,
     }));
 
     try {
-      // 1. Upload file
-      const filePath = `imports/${Date.now()}_${file.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from('process-imports')
-        .upload(filePath, file);
-
-      if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`);
-
-      setState(prev => ({ ...prev, progress: 10 }));
-
-      // 2. Create job record
-      const { data: jobData, error: jobError } = await supabase
-        .from('import_jobs')
-        .insert({
-          file_name: file.name,
-          file_path: filePath,
-          status: 'pending',
-          created_by: user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(user.id)
-            ? user.id : null,
-        })
-        .select()
-        .single();
-
-      if (jobError) throw new Error(`Erro ao criar job: ${jobError.message}`);
-
-      jobIdRef.current = jobData.id;
-      setState(prev => ({ ...prev, progress: 15 }));
-
       if (isPdf) {
-        // 3. Extract text in browser
-        setState(prev => ({ ...prev, phase: 'extracting' }));
+        // PDF flow: extract text in browser, skip Storage upload entirely.
+        // Claude receives the same text regardless — no quality loss, no size limit.
 
+        // 1. Create job record (no file_path for PDFs)
+        const { data: jobData, error: jobError } = await supabase
+          .from('import_jobs')
+          .insert({
+            file_name: file.name,
+            file_path: null,
+            status: 'pending',
+            created_by: user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(user.id)
+              ? user.id : null,
+          })
+          .select()
+          .single();
+
+        if (jobError) throw new Error(`Erro ao criar job: ${jobError.message}`);
+
+        jobIdRef.current = jobData.id;
+        setState(prev => ({ ...prev, progress: 10 }));
+
+        // 2. Extract text in browser
         const { chunks } = await extractPdfText(file, (p) => {
           setState(prev => ({
             ...prev,
             extractionProgress: p,
-            progress: 15 + Math.round((p.currentPage / Math.max(p.totalPages, 1)) * 15),
+            progress: 10 + Math.round((p.currentPage / Math.max(p.totalPages, 1)) * 20),
           }));
         });
 
         setState(prev => ({ ...prev, extractionProgress: null, progress: 30, phase: 'analyzing_chunks' }));
 
-        // 4. Send chunks to edge function (start action - returns immediately)
+        // 3. Send chunks to edge function
         await callEdgeFunction({
           action: 'start',
           importJobId: jobData.id,
@@ -255,15 +241,37 @@ export function useImportJob() {
           textChunks: chunks,
         });
 
-        setState(prev => ({
-          ...prev,
-          totalChunks: chunks.length,
-        }));
+        setState(prev => ({ ...prev, totalChunks: chunks.length }));
 
-        // 5. Start polling + batch processing
+        // 4. Start polling + batch processing
         startPolling(jobData.id);
+
       } else {
-        // ZIP: use legacy single-call flow
+        // ZIP flow: upload to Storage, then process server-side
+        const filePath = `imports/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('process-imports')
+          .upload(filePath, file);
+
+        if (uploadError) throw new Error(`Erro no upload: ${uploadError.message}`);
+
+        setState(prev => ({ ...prev, progress: 10 }));
+
+        const { data: jobData, error: jobError } = await supabase
+          .from('import_jobs')
+          .insert({
+            file_name: file.name,
+            file_path: filePath,
+            status: 'pending',
+            created_by: user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(user.id)
+              ? user.id : null,
+          })
+          .select()
+          .single();
+
+        if (jobError) throw new Error(`Erro ao criar job: ${jobError.message}`);
+
+        jobIdRef.current = jobData.id;
         setState(prev => ({ ...prev, phase: 'analyzing_chunks', progress: 30 }));
 
         const result = await callEdgeFunction({
