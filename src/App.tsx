@@ -16,6 +16,7 @@ import ContactPage from "./pages/ContactPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import AssistantPage from "./pages/AssistantPage";
+import ImportacaoLotePage from "./pages/ImportacaoLotePage";
 
 import TermsPage from "./pages/TermsPage";
 
@@ -45,6 +46,7 @@ function AppRoutes() {
         <Route path="/contato" element={<ContactPage />} />
         <Route path="/configuracoes" element={<SettingsPage />} />
         <Route path="/assistente" element={<AssistantPage />} />
+        <Route path="/importacao-lote" element={<ImportacaoLotePage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
