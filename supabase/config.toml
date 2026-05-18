@@ -1,0 +1,22 @@
+project_id = "rdhyjwkxpudsdrczvqpa"
+
+[functions.chat-especialista]
+verify_jwt = false
+
+[functions.gerar-documento]
+verify_jwt = false
+
+[functions.processar-importacao]
+verify_jwt = false
+
+[functions.ai-key-status]
+verify_jwt = false
+
+[functions.datajud-consulta]
+verify_jwt = false
+
+[functions.analisar-risco]
+verify_jwt = false
+
+[functions.analisar-juridico]
+verify_jwt = false

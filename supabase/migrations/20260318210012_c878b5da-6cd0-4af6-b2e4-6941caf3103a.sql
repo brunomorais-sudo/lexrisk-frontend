@@ -1,0 +1,1 @@
+CREATE POLICY "Anyone can update processes" ON public.processes FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
