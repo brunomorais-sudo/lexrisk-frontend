@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, Building2, FolderOpen, Settings, LogOut,
-  Scale, Bell, ChevronDown, Phone, Brain
+  Scale, Bell, ChevronDown, Phone, Brain, TableIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -15,12 +15,14 @@ const navItems = {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/clientes', icon: Building2, label: 'Clientes' },
     { to: '/processos', icon: FolderOpen, label: 'Processos' },
+    { to: '/importacao-lote', icon: TableIcon, label: 'Importação em Lote' },
     { to: '/configuracoes', icon: Settings, label: 'Configurações' },
   ],
   lawyer: [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/clientes', icon: Building2, label: 'Clientes' },
     { to: '/processos', icon: FolderOpen, label: 'Processos' },
+    { to: '/importacao-lote', icon: TableIcon, label: 'Importação em Lote' },
     { to: '/configuracoes', icon: Settings, label: 'Configurações' },
   ],
   client_user: [
@@ -52,7 +54,6 @@ export function AppSidebar() {
     navigate('/login');
   };
 
-  // Demo user switcher
   const demoUsers = users.map(u => {
     const mem = memberships.find(m => m.user_id === u.id);
     return { ...u, role: mem?.role };
