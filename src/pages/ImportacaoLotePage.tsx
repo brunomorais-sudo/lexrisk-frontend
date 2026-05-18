@@ -2,7 +2,6 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
 import {
   Upload, FileSpreadsheet, CheckCircle2, XCircle, Loader2,
   ArrowRight, BarChart3, AlertTriangle, ChevronRight
@@ -12,7 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-const EDGE_URL = \`\${import.meta.env.VITE_SUPABASE_URL}/functions/v1/importacao-lote\`;
+const EDGE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/importacao-lote`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 type Phase = 'idle' | 'parsing' | 'mapping' | 'processing' | 'done';
@@ -30,28 +29,41 @@ interface RowResult {
 async function callEdge(body: Record<string, unknown>) {
   const resp = await fetch(EDGE_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: \`Bearer \${ANON_KEY}\` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ANON_KEY}` },
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: \`HTTP \${resp.status}\` }));
-    throw new Error(err.error || \`HTTP \${resp.status}\`);
+    const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+    throw new Error(err.error || `HTTP ${resp.status}`);
   }
   return resp.json();
 }
 
-function parseSpreadsheet(file: File): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
+// Load SheetJS from CDN dynamically — no npm install needed
+async function loadXLSX(): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if ((window as any).XLSX) return resolve((window as any).XLSX);
+    const script = document.createElement('script');
+    script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    script.onload = () => resolve((window as any).XLSX);
+    script.onerror = () => reject(new Error('Falha ao carregar XLSX'));
+    document.head.appendChild(script);
+  });
+}
+
+async function parseSpreadsheet(file: File): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
+  const XLSX = await loadXLSX();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const data = new Uint8Array(e.target!.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
         const json: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        if (!json.length) return reject(new Error('Planilha vazia ou sem dados'));
+        if (!json.length) return reject(new Error('Planilha vazia'));
         resolve({ headers: Object.keys(json[0]), rows: json });
-      } catch (err: any) { reject(new Error(\`Erro ao ler planilha: \${err.message}\`)); }
+      } catch (err: any) { reject(new Error('Erro ao ler planilha: ' + err.message)); }
     };
     reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
     reader.readAsArrayBuffer(file);
@@ -66,13 +78,14 @@ function parseCSV(file: File): Promise<{ headers: string[]; rows: Record<string,
         const text = e.target!.result as string;
         const lines = text.split('\n').filter(l => l.trim());
         if (lines.length < 2) return reject(new Error('CSV vazio'));
-        const headers = lines[0].split(/[;,]/).map(h => h.trim().replace(/^"|"$/g, ''));
+        const sep = lines[0].includes(';') ? ';' : ',';
+        const headers = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
         const rows = lines.slice(1).map(line => {
-          const vals = line.split(/[;,]/).map(v => v.trim().replace(/^"|"$/g, ''));
+          const vals = line.split(sep).map(v => v.trim().replace(/^"|"$/g, ''));
           return Object.fromEntries(headers.map((h, i) => [h, vals[i] || '']));
         });
         resolve({ headers, rows });
-      } catch (err: any) { reject(new Error(\`Erro ao ler CSV: \${err.message}\`)); }
+      } catch (err: any) { reject(new Error('Erro ao ler CSV: ' + err.message)); }
     };
     reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
     reader.readAsText(file, 'UTF-8');
@@ -118,7 +131,7 @@ export default function ImportacaoLotePage() {
     try {
       const parsed = isXlsx ? await parseSpreadsheet(file) : await parseCSV(file);
       setTotalRows(parsed.rows.length);
-      toast.info(\`\${parsed.rows.length} linhas detectadas. Mapeando colunas...\`);
+      toast.info(`${parsed.rows.length} linhas detectadas. Mapeando colunas com IA...`);
 
       setPhase('mapping');
       const { mapping } = await callEdge({ action: 'map-columns', headers: parsed.headers, rows: parsed.rows.slice(0, 5) });
@@ -126,15 +139,14 @@ export default function ImportacaoLotePage() {
 
       const initialResults: RowResult[] = parsed.rows.map((row, i) => ({
         index: i,
-        process_number: row[Object.keys(mapping).find((k: string) => mapping[k] === 'process_number') || ''] || \`Linha \${i + 1}\`,
+        process_number: row[Object.keys(mapping).find((k: string) => mapping[k] === 'process_number') || ''] || `Linha ${i + 1}`,
         status: 'pending',
       }));
       setResults(initialResults);
-      toast.success(\`Colunas mapeadas! Analisando \${parsed.rows.length} processos...\`);
+      toast.success(`Colunas mapeadas! Analisando ${parsed.rows.length} processos...`);
 
       setPhase('processing');
       let processed = 0;
-
       for (let i = 0; i < parsed.rows.length; i++) {
         setResults(prev => prev.map(r => r.index === i ? { ...r, status: 'processing' } : r));
         try {
@@ -160,6 +172,7 @@ export default function ImportacaoLotePage() {
         setProcessedCount(processed);
       }
       setPhase('done');
+      toast.success('Importação concluída!');
     } catch (err: any) {
       toast.error(err.message || 'Erro na importação');
       setPhase('idle');
@@ -221,7 +234,7 @@ export default function ImportacaoLotePage() {
               <p className="font-medium">
                 {phase === 'parsing' && 'Lendo planilha...'}
                 {phase === 'mapping' && 'IA mapeando colunas...'}
-                {phase === 'processing' && \`Analisando processos (\${processedCount}/\${totalRows})\`}
+                {phase === 'processing' && `Analisando processos (${processedCount}/${totalRows})`}
               </p>
               <p className="text-sm text-muted-foreground">{fileName}</p>
             </div>
@@ -282,7 +295,7 @@ export default function ImportacaoLotePage() {
                   </Badge>
                 )}
                 {row.process_id && row.status === 'success' && (
-                  <Button size="sm" variant="ghost" className="flex-shrink-0 h-7 px-2 text-xs" onClick={() => navigate(\`/processos/\${row.process_id}\`)}>
+                  <Button size="sm" variant="ghost" className="flex-shrink-0 h-7 px-2 text-xs" onClick={() => navigate(`/processos/${row.process_id}`)}>
                     Ver <ArrowRight className="h-3 w-3 ml-1" />
                   </Button>
                 )}
@@ -300,8 +313,8 @@ export default function ImportacaoLotePage() {
               <p className="font-semibold text-green-800">Importação concluída!</p>
               <p className="text-sm text-green-700">
                 {successCount} processo{successCount !== 1 ? 's' : ''} salvo{successCount !== 1 ? 's' : ''}.
-                {dupCount > 0 && \` \${dupCount} já existiam.\`}
-                {errorCount > 0 && \` \${errorCount} com erro.\`}
+                {dupCount > 0 && ` ${dupCount} já existiam.`}
+                {errorCount > 0 && ` ${errorCount} com erro.`}
               </p>
             </div>
           </div>
