@@ -197,19 +197,19 @@ export default function ProcessesPage() {
         const result = resp.data;
         await supabase.from('process_analyses').insert({
           process_id: proc.id,
-          executive_summary: result.resumo_executivo || result.executive_summary || 'Análise concluída.',
+          executive_summary: result.resumo_executivo || result.executive_summary || 'Analise concluida.',
           case_classification: proc.subject_main || 'Trabalhista',
           case_value_identified: proc.claim_value || 0,
-          financial_impact_summary: `Exposição estimada: ${formatCurrency(result.valor_atualizado || result.valorAtualizado || proc.claim_value || 0)}`,
+          financial_impact_summary: 'Exposicao estimada: ' + formatCurrency(result.valor_atualizado || result.valorAtualizado || proc.claim_value || 0),
           risk_level: result.nivel_risco || result.nivelRisco || 'medio',
           risk_score_numeric: result.score_risco ?? result.scoreRisco ?? 50,
           confidence_level: 'media',
           justification_text: result.resumo_executivo || result.executive_summary || '',
-          next_steps: ['Revisar documentação do processo'],
+          next_steps: ['Revisar documentacao do processo'],
           missing_information: [],
         });
       } catch (err: any) {
-        console.error(`Error analyzing process ${proc.process_number}:`, err);
+        console.error('Error analyzing process ' + proc.process_number + ':', err);
         errors++;
       }
 
@@ -219,9 +219,9 @@ export default function ProcessesPage() {
 
     setAnalyzing(false);
     if (errors === 0) {
-      toast.success(`${toAnalyze.length} processos analisados com sucesso!`);
+      toast.success(toAnalyze.length + ' processos analisados com sucesso!');
     } else {
-      toast.warning(`${done - errors} analisados, ${errors} com erro.`);
+      toast.warning((done - errors) + ' analisados, ' + errors + ' com erro.');
     }
     fetchData();
   };
@@ -245,9 +245,9 @@ export default function ProcessesPage() {
             {empresaId && company ? company.trade_name : 'Processos'}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {loading ? 'Carregando...' : `${filtered.length} processo(s) encontrado(s)`}
+            {loading ? 'Carregando...' : filtered.length + ' processo(s) encontrado(s)'}
             {!loading && unanalyzedCount > 0 && empresaId && (
-              <span className="ml-2 text-amber-600 dark:text-amber-400">• {unanalyzedCount} sem análise</span>
+              <span className="ml-2 text-amber-600 dark:text-amber-400">• {unanalyzedCount} sem analise</span>
             )}
           </p>
         </div>
@@ -274,9 +274,9 @@ export default function ProcessesPage() {
             </Button>
           )}
           {empresaId && company && (
-            <Link to={`/relatorio?empresa=${empresaId}&nome=${encodeURIComponent(company.trade_name)}`}>
+            <Link to={'/relatorio?empresa=' + empresaId + '&nome=' + encodeURIComponent(company.trade_name)}>
               <Button variant="outline" className="gap-2">
-                <FileBarChart2 className="h-4 w-4" /> Relatório Geral
+                <FileBarChart2 className="h-4 w-4" /> Relatorio Geral
               </Button>
             </Link>
           )}
@@ -298,7 +298,7 @@ export default function ProcessesPage() {
         <div className="relative flex-1 min-w-[250px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por número, reclamante, empresa ou tema..."
+            placeholder="Buscar por numero, reclamante, empresa ou tema..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="pl-10"
@@ -309,9 +309,9 @@ export default function ProcessesPage() {
           <SelectContent>
             <SelectItem value="all">Todos os riscos</SelectItem>
             <SelectItem value="alto">Alto Risco</SelectItem>
-            <SelectItem value="medio">Médio Risco</SelectItem>
+            <SelectItem value="medio">Medio Risco</SelectItem>
             <SelectItem value="baixo">Baixo Risco</SelectItem>
-            <SelectItem value="sem_analise">Sem análise</SelectItem>
+            <SelectItem value="sem_analise">Sem analise</SelectItem>
           </SelectContent>
         </Select>
         <Select value={phaseFilter} onValueChange={setPhaseFilter}>
@@ -320,7 +320,7 @@ export default function ProcessesPage() {
             <SelectItem value="all">Todas as fases</SelectItem>
             <SelectItem value="conhecimento">Conhecimento</SelectItem>
             <SelectItem value="recursal">Recursal</SelectItem>
-            <SelectItem value="execucao">Execução</SelectItem>
+            <SelectItem value="execucao">Execucao</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -334,7 +334,7 @@ export default function ProcessesPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((proc, i) => (
               <motion.div key={proc.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.02, 0.5) }}>
-                <Link to={`/processos/${proc.id}`} className="block rounded-xl border bg-card p-5 shadow-sm hover:shadow-md transition-shadow">
+                <Link to={'/processos/' + proc.id} className="block rounded-xl border bg-card p-5 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-mono text-muted-foreground truncate">{proc.process_number}</p>
@@ -343,18 +343,18 @@ export default function ProcessesPage() {
                     </div>
                     {proc.risk_level
                       ? <RiskBadge level={proc.risk_level} />
-                      : <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">Sem análise</span>
+                      : <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">Sem analise</span>
                     }
                   </div>
                   <p className="mt-3 text-xs text-muted-foreground line-clamp-2">{proc.subject_main}</p>
                   <div className="mt-3 flex items-center justify-between">
                     <div className="flex gap-2 flex-wrap">
                       <PhaseBadge phase={proc.phase} />
-                      {proc.tribunal && <span className="text-xs text-muted-foreground">{proc.tribunal}{proc.vara ? ` • ${proc.vara}` : ''}</span>}
+                      {proc.tribunal && <span className="text-xs text-muted-foreground">{proc.tribunal}{proc.vara ? ' - ' + proc.vara : ''}</span>}
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between border-t pt-3">
-                    <span className="text-xs text-muted-foreground truncate">{proc.client_company_name || '—'}</span>
+                    <span className="text-xs text-muted-foreground truncate">{proc.client_company_name || '-'}</span>
                     <span className="text-sm font-semibold text-foreground">{formatCurrency(proc.claim_value || 0)}</span>
                   </div>
                 </Link>
