@@ -5,7 +5,7 @@ import { RiskBadge, PhaseBadge } from '@/components/badges/RiskBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FolderOpen, Brain, Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Plus, Search, FolderOpen, Brain, Loader2, ArrowLeft, CheckCircle2, FileBarChart2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -57,6 +57,7 @@ export default function ProcessesPage() {
     setLoading(true);
     try {
       let currentCompany: ClientCompany | null = null;
+
       if (empresaId) {
         const { data: cc } = await supabase
           .from('client_companies')
@@ -94,8 +95,8 @@ export default function ProcessesPage() {
       if (error) throw error;
 
       const procList = procs || [];
-      const procIds = procList.map((p: any) => p.id);
 
+      const procIds = procList.map(p => p.id);
       const { data: analyses } = procIds.length > 0
         ? await supabase
             .from('process_analyses')
@@ -104,26 +105,30 @@ export default function ProcessesPage() {
             .order('created_at', { ascending: false })
         : { data: [] };
 
-      const analysisMap: Record<string, any> = {};
+      const analysisMap: Record<string, { risk_level: string; risk_score_numeric: number }> = {};
       for (const a of (analyses || [])) {
-        if (!analysisMap[a.process_id]) analysisMap[a.process_id] = a;
+        if (!analysisMap[a.process_id]) {
+          analysisMap[a.process_id] = a;
+        }
       }
 
       let companyMap: Record<string, string> = {};
       if (!empresaId) {
-        const companyIds = [...new Set(procList.map((p: any) => p.client_company_id).filter(Boolean))];
+        const companyIds = [...new Set(procList.map(p => p.client_company_id).filter(Boolean))];
         if (companyIds.length > 0) {
           const { data: companies } = await supabase
             .from('client_companies')
             .select('id, trade_name')
             .in('id', companyIds as string[]);
-          for (const c of (companies || [])) companyMap[c.id] = c.trade_name;
+          for (const c of (companies || [])) {
+            companyMap[c.id] = c.trade_name;
+          }
         }
       }
 
-      const enriched: Process[] = procList.map((p: any) => ({
+      const enriched: Process[] = procList.map(p => ({
         ...p,
-        client_company_name: empresaId ? (currentCompany?.trade_name || '') : companyMap[p.client_company_id || ''],
+        client_company_name: empresaId ? currentCompany?.trade_name : companyMap[p.client_company_id || ''],
         risk_level: analysisMap[p.id]?.risk_level,
         risk_score: analysisMap[p.id]?.risk_score_numeric,
       }));
@@ -137,9 +142,12 @@ export default function ProcessesPage() {
     }
   }, [empresaId]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   let filtered = processes;
+
   if (search) {
     const s = search.toLowerCase();
     filtered = filtered.filter(p =>
@@ -164,10 +172,13 @@ export default function ProcessesPage() {
       toast.info('Todos os processos já possuem análise de risco.');
       return;
     }
+
     setAnalyzing(true);
     setAnalyzeProgress({ done: 0, total: toAnalyze.length });
+
     let done = 0;
     let errors = 0;
+
     for (const proc of toAnalyze) {
       try {
         const resp = await supabase.functions.invoke('analisar-risco', {
@@ -180,7 +191,9 @@ export default function ProcessesPage() {
             reclamada: proc.defendant_name,
           },
         });
+
         if (resp.error) throw new Error(resp.error.message);
+
         const result = resp.data;
         await supabase.from('process_analyses').insert({
           process_id: proc.id,
@@ -196,15 +209,20 @@ export default function ProcessesPage() {
           missing_information: [],
         });
       } catch (err: any) {
-        console.error(`Error analyzing ${proc.process_number}:`, err);
+        console.error(`Error analyzing process ${proc.process_number}:`, err);
         errors++;
       }
+
       done++;
       setAnalyzeProgress({ done, total: toAnalyze.length });
     }
+
     setAnalyzing(false);
-    if (errors === 0) toast.success(`${toAnalyze.length} processos analisados com sucesso!`);
-    else toast.warning(`${done - errors} analisados, ${errors} com erro.`);
+    if (errors === 0) {
+      toast.success(`${toAnalyze.length} processos analisados com sucesso!`);
+    } else {
+      toast.warning(`${done - errors} analisados, ${errors} com erro.`);
+    }
     fetchData();
   };
 
@@ -223,7 +241,9 @@ export default function ProcessesPage() {
               <span className="text-xs font-medium text-foreground">{company.trade_name}</span>
             </div>
           )}
-          <h1 className="page-header">{empresaId && company ? company.trade_name : 'Processos'}</h1>
+          <h1 className="page-header">
+            {empresaId && company ? company.trade_name : 'Processos'}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {loading ? 'Carregando...' : `${filtered.length} processo(s) encontrado(s)`}
             {!loading && unanalyzedCount > 0 && empresaId && (
@@ -231,23 +251,45 @@ export default function ProcessesPage() {
             )}
           </p>
         </div>
-        <div className="flex gap-2 items-center">
+
+        <div className="flex gap-2">
           {empresaId && !isClient && unanalyzedCount > 0 && (
-            <Button variant="outline" className="gap-2" onClick={handleAnalyzeAll} disabled={analyzing || loading}>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleAnalyzeAll}
+              disabled={analyzing || loading}
+            >
               {analyzing ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />{analyzeProgress.done}/{analyzeProgress.total} analisando...</>
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {analyzeProgress.done}/{analyzeProgress.total} analisando...
+                </>
               ) : (
-                <><Brain className="h-4 w-4" />Analisar todos com IA ({unanalyzedCount})</>
+                <>
+                  <Brain className="h-4 w-4" />
+                  Analisar todos com IA ({unanalyzedCount})
+                </>
               )}
             </Button>
           )}
+          {empresaId && company && (
+            <Link to={`/relatorio?empresa=${empresaId}&nome=${encodeURIComponent(company.trade_name)}`}>
+              <Button variant="outline" className="gap-2">
+                <FileBarChart2 className="h-4 w-4" /> Relatório Geral
+              </Button>
+            </Link>
+          )}
           {empresaId && !isClient && unanalyzedCount === 0 && !loading && processes.length > 0 && (
             <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 px-3">
-              <CheckCircle2 className="h-4 w-4" /> Todos analisados
+              <CheckCircle2 className="h-4 w-4" />
+              Todos analisados
             </div>
           )}
           {!isClient && !empresaId && (
-            <Link to="/processos/novo"><Button className="gap-2"><Plus className="h-4 w-4" /> Novo Processo</Button></Link>
+            <Link to="/processos/novo">
+              <Button className="gap-2"><Plus className="h-4 w-4" /> Novo Processo</Button>
+            </Link>
           )}
         </div>
       </div>
@@ -255,7 +297,12 @@ export default function ProcessesPage() {
       <div className="flex flex-wrap gap-3 mb-6">
         <div className="relative flex-1 min-w-[250px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Buscar por número, reclamante, empresa ou tema..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10" />
+          <Input
+            placeholder="Buscar por número, reclamante, empresa ou tema..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-10"
+          />
         </div>
         <Select value={riskFilter} onValueChange={setRiskFilter}>
           <SelectTrigger className="w-[160px]"><SelectValue placeholder="Risco" /></SelectTrigger>
@@ -314,6 +361,7 @@ export default function ProcessesPage() {
               </motion.div>
             ))}
           </div>
+
           {filtered.length === 0 && (
             <div className="py-16 text-center">
               <FolderOpen className="mx-auto h-12 w-12 text-muted-foreground/40" />
