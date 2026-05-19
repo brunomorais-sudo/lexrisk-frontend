@@ -2,16 +2,19 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard, Building2, FolderOpen, Settings, LogOut,
-  Scale, Bell, ChevronDown, Phone, Brain, TableIcon
+  Scale, Brain, TableIcon, Phone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { users, memberships } from '@/data/mock-data';
 
-const navItems = {
+const navItems: Record<string, { to: string; icon: any; label: string }[]> = {
   office_admin: [
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/clientes', icon: Building2, label: 'Clientes' },
+    { to: '/processos', icon: FolderOpen, label: 'Processos' },
+    { to: '/importacao-lote', icon: TableIcon, label: 'Importação em Lote' },
+    { to: '/configuracoes', icon: Settings, label: 'Configurações' },
+  ],
+  law_firm_admin: [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/clientes', icon: Building2, label: 'Clientes' },
     { to: '/processos', icon: FolderOpen, label: 'Processos' },
@@ -33,14 +36,14 @@ const navItems = {
 };
 
 export function AppSidebar() {
-  const { user, role, logout, switchUser } = useAuth();
+  const { user, role, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   if (!role || !user) return null;
 
-  const baseItems = navItems[role] || [];
+  const baseItems = navItems[role] || navItems['law_firm_admin'];
   const isPro = user.plan === 'pro' || user.plan === 'enterprise';
-  const isStaff = role === 'office_admin' || role === 'lawyer';
+  const isStaff = role !== 'client_user';
   const items = isStaff && isPro
     ? [
         ...baseItems.slice(0, -1),
@@ -49,15 +52,18 @@ export function AppSidebar() {
       ]
     : baseItems;
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 
-  const demoUsers = users.map(u => {
-    const mem = memberships.find(m => m.user_id === u.id);
-    return { ...u, role: mem?.role };
-  });
+  const initials = user.full_name
+    ? user.full_name.split(' ').map((n: string) => n[0]).slice(0, 2).join('')
+    : user.email.substring(0, 2).toUpperCase();
+
+  const roleLabel = role === 'client_user' ? 'Cliente'
+    : role === 'lawyer' ? 'Advogado'
+    : 'Admin';
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-nav-bg">
@@ -87,38 +93,24 @@ export function AppSidebar() {
         })}
       </nav>
 
-      {/* Demo User Switcher */}
+      {/* User + Logout */}
       <div className="border-t border-nav-hover p-3">
-        <p className="mb-2 px-3 text-[10px] uppercase tracking-wider text-nav-muted">Demo: Trocar Usuário</p>
-        <DropdownMenu>
-          <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-nav-foreground hover:bg-nav-hover transition-colors">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-nav-active text-xs font-bold text-primary-foreground">
-              {user.full_name.split(' ').map(n => n[0]).slice(0, 2).join('')}
-            </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium truncate">{user.full_name}</p>
-              <p className="text-[10px] text-nav-muted">
-                {role === 'office_admin' ? 'Admin' : role === 'lawyer' ? 'Advogado' : 'Cliente'}
-              </p>
-            </div>
-            <ChevronDown className="h-4 w-4 text-nav-muted" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
-            {demoUsers.map(u => (
-              <DropdownMenuItem key={u.id} onClick={() => { switchUser(u.id); navigate('/dashboard'); }}>
-                <div>
-                  <p className="text-sm font-medium">{u.full_name}</p>
-                  <p className="text-xs text-muted-foreground">{u.email} • {u.role === 'office_admin' ? 'Admin' : u.role === 'lawyer' ? 'Advogado' : 'Cliente'}</p>
-                </div>
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sair
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-nav-active text-xs font-bold text-primary-foreground shrink-0">
+            {initials}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-nav-foreground truncate">{user.full_name || user.email}</p>
+            <p className="text-[10px] text-nav-muted">{roleLabel}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            title="Sair"
+            className="text-nav-muted hover:text-destructive transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </aside>
   );
