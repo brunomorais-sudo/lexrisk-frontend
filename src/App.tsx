@@ -17,7 +17,7 @@ import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 import AssistantPage from "./pages/AssistantPage";
 import ImportacaoLotePage from "./pages/ImportacaoLotePage";
-
+import RelatorioPage from "./pages/RelatorioPage";
 import TermsPage from "./pages/TermsPage";
 
 const queryClient = new QueryClient();
@@ -36,7 +36,6 @@ function AppRoutes() {
       <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <LandingPage />} />
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-      
       <Route path="/termos" element={<TermsPage />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={isClient ? <ClientDashboardPage /> : <DashboardPage />} />
@@ -47,6 +46,7 @@ function AppRoutes() {
         <Route path="/configuracoes" element={<SettingsPage />} />
         <Route path="/assistente" element={<AssistantPage />} />
         <Route path="/importacao-lote" element={<ImportacaoLotePage />} />
+        <Route path="/relatorio" element={<RelatorioPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
