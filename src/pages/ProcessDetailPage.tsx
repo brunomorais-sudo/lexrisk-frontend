@@ -11,6 +11,7 @@ import { FinancialImpactTab } from '@/components/process/FinancialImpactTab';
 import { FinancialPlanningTab } from '@/components/process/FinancialPlanningTab';
 import { ClientExecutiveSummary } from '@/components/process/ClientExecutiveSummary';
 import { DataJudTab } from '@/components/process/DataJudTab';
+import { PjeTab } from '@/components/process/PjeTab';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -433,7 +434,7 @@ export default function ProcessDetailPage() {
           <TabsTrigger value="planejamento" className="text-xs">Planejamento Financeiro</TabsTrigger>
           <TabsTrigger value="chat" className="text-xs">Chat IA</TabsTrigger>
           <TabsTrigger value="documentos-gerados" className="text-xs">Gerar Documentos</TabsTrigger>
-          <TabsTrigger value="datajud" className="text-xs">DataJud (CNJ)</TabsTrigger>
+          <TabsTrigger value="pje" className="text-xs">PJe / Andamentos</TabsTrigger>
           {!isClient && <TabsTrigger value="auditoria" className="text-xs">Auditoria</TabsTrigger>}
         </TabsList>
 
@@ -566,14 +567,18 @@ export default function ProcessDetailPage() {
             )}
           </div>
 
-          {/* Consulta DataJud (CNJ) inline na Linha do Tempo */}
-          <div className="rounded-xl border bg-card p-5">
-            <h3 className="section-title mb-1">Consulta DataJud (CNJ)</h3>
-            <p className="text-xs text-muted-foreground mb-4">
-              Importe andamentos oficiais diretamente da API pública do CNJ.
-            </p>
-            <DataJudTab initialNumber={process.process_number} />
-          </div>
+          {/* Andamentos PJe (DataJud CNJ) inline na Linha do Tempo */}
+          {process.id && !mockProcess ? (
+            <PjeTab processId={process.id} processNumber={process.process_number} />
+          ) : (
+            <div className="rounded-xl border bg-card p-5">
+              <h3 className="section-title mb-1">Consulta DataJud (CNJ)</h3>
+              <p className="text-xs text-muted-foreground mb-4">
+                Importe andamentos oficiais diretamente da API pública do CNJ.
+              </p>
+              <DataJudTab initialNumber={process.process_number} />
+            </div>
+          )}
         </TabsContent>
 
         {/* TAB: Documentos */}
@@ -1021,9 +1026,13 @@ export default function ProcessDetailPage() {
           </TabsContent>
         )}
 
-        {/* TAB: DataJud (CNJ) */}
-        <TabsContent value="datajud">
-          <DataJudTab initialNumber={process.process_number} />
+        {/* TAB: PJe / Andamentos (DataJud CNJ — 1º e 2º grau) */}
+        <TabsContent value="pje">
+          {process.id && !mockProcess ? (
+            <PjeTab processId={process.id} processNumber={process.process_number} />
+          ) : (
+            <DataJudTab initialNumber={process.process_number} />
+          )}
         </TabsContent>
       </Tabs>
     </div>
