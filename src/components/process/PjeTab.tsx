@@ -88,7 +88,6 @@ function GrauCard({ data }: { data: GrauData }) {
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/30">
         <div className="flex items-center gap-2">
           <Building2 className="h-4 w-4 text-primary" />
@@ -99,9 +98,7 @@ function GrauCard({ data }: { data: GrauData }) {
           <Badge variant="secondary" className="text-xs">{data.totalMovimentos} movimentos</Badge>
         </div>
       </div>
-
       <div className="p-5 space-y-4">
-        {/* Metadados */}
         <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
           {data.orgaoJulgador && (
             <div className="col-span-2 md:col-span-1">
@@ -134,8 +131,6 @@ function GrauCard({ data }: { data: GrauData }) {
             </div>
           )}
         </dl>
-
-        {/* Partes */}
         {(data.reclamantes?.length > 0 || data.reclamados?.length > 0) && (
           <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-start gap-2">
@@ -152,16 +147,11 @@ function GrauCard({ data }: { data: GrauData }) {
             </div>
           </div>
         )}
-
-        {/* Movimentações */}
         <div className="border-t pt-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold">Andamentos Processuais</p>
             {data.totalMovimentos > 10 && (
-              <button
-                onClick={() => setShowAll(!showAll)}
-                className="text-xs text-primary hover:underline"
-              >
+              <button onClick={() => setShowAll(!showAll)} className="text-xs text-primary hover:underline">
                 {showAll ? 'Mostrar menos' : `Ver todos (${data.totalMovimentos})`}
               </button>
             )}
@@ -180,10 +170,6 @@ export function PjeTab({ processId, processNumber }: Props) {
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-  const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-  // Carregar dados já salvos no banco
   const loadSavedData = async () => {
     setLoading(true);
     try {
@@ -217,39 +203,19 @@ export function PjeTab({ processId, processNumber }: Props) {
     }
   };
 
-  // Disparar nova busca no PJe
   const handleSync = async () => {
     setSyncing(true);
     setNotFound(false);
     try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/buscar-pje`, {
+      const resp = await fetch('/api/buscar-pje', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-          apikey: SUPABASE_KEY,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ process_id: processId, process_number: processNumber }),
       });
-
       const data = await resp.json();
-
-      if (!resp.ok) {
-        toast.error(data?.error || 'Erro ao consultar PJe');
-        return;
-      }
-
-      if (data.status === 'not_found') {
-        toast.info('Processo não encontrado no DataJud/PJe');
-        setNotFound(true);
-        return;
-      }
-
-      toast.success(
-        `PJe sincronizado — ${data.grausEncontrados?.join(' + ')} encontrado(s), ` +
-        `${Object.values(data.movimentosPorGrau || {}).reduce((a: number, b) => a + (b as number), 0)} andamentos`
-      );
-
+      if (!resp.ok) { toast.error(data?.error || 'Erro ao consultar PJe'); return; }
+      if (data.status === 'not_found') { toast.info('Processo não encontrado no DataJud/PJe'); setNotFound(true); return; }
+      toast.success(`PJe sincronizado — ${data.grausEncontrados?.join(' + ')} encontrado(s), ${Object.values(data.movimentosPorGrau || {}).reduce((a: number, b) => a + (b as number), 0)} andamentos`);
       await loadSavedData();
     } catch (err) {
       toast.error('Falha de conexão com o PJe');
@@ -259,13 +225,10 @@ export function PjeTab({ processId, processNumber }: Props) {
     }
   };
 
-  useEffect(() => {
-    loadSavedData();
-  }, [processId]);
+  useEffect(() => { loadSavedData(); }, [processId]);
 
   return (
     <div className="space-y-4">
-      {/* Header com botão de atualização */}
       <div className="rounded-xl border bg-card p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -280,54 +243,38 @@ export function PjeTab({ processId, processNumber }: Props) {
               </p>
             )}
           </div>
-          <Button
-            onClick={handleSync}
-            disabled={syncing || loading}
-            variant="outline"
-            className="gap-2 shrink-0"
-          >
+          <Button onClick={handleSync} disabled={syncing || loading} variant="outline" className="gap-2 shrink-0">
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             {syncing ? 'Consultando...' : 'Atualizar PJe'}
           </Button>
         </div>
       </div>
-
-      {/* Loading */}
       {loading && (
         <div className="rounded-xl border bg-card p-8 text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground/50" />
           <p className="mt-3 text-sm text-muted-foreground">Carregando dados...</p>
         </div>
       )}
-
-      {/* Sem dados e não sincronizado */}
       {!loading && graus.length === 0 && !notFound && (
         <div className="rounded-xl border bg-card p-8 text-center">
           <Clock className="mx-auto h-10 w-10 text-muted-foreground/30" />
           <p className="mt-3 text-sm font-medium text-muted-foreground">Sem dados do PJe ainda</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Clique em "Atualizar PJe" para buscar os andamentos no DataJud/CNJ.
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">Clique em "Atualizar PJe" para buscar os andamentos no DataJud/CNJ.</p>
           <Button onClick={handleSync} disabled={syncing} className="mt-4 gap-2">
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Buscar agora
           </Button>
         </div>
       )}
-
-      {/* Não encontrado */}
       {!loading && notFound && (
         <div className="rounded-xl border bg-card p-8 text-center">
           <AlertCircle className="mx-auto h-10 w-10 text-muted-foreground/40" />
           <p className="mt-3 text-sm font-medium text-muted-foreground">Processo não encontrado no DataJud</p>
           <p className="text-xs text-muted-foreground mt-1">
             O número <code className="font-mono bg-muted px-1 rounded">{processNumber}</code> não retornou resultados.
-            O processo pode ainda não estar indexado ou o número pode estar incorreto.
           </p>
         </div>
       )}
-
-      {/* Dados por grau */}
       {!loading && graus.length > 0 && (
         <>
           <div className="flex items-center gap-2">
@@ -336,9 +283,7 @@ export function PjeTab({ processId, processNumber }: Props) {
               {graus.length === 2 ? '1º e 2º grau encontrados' : graus.length === 1 ? `${graus[0].grauLabel} encontrado` : 'Dados encontrados'}
             </span>
           </div>
-          {graus.map((g) => (
-            <GrauCard key={g.grau} data={g} />
-          ))}
+          {graus.map((g) => (<GrauCard key={g.grau} data={g} />))}
         </>
       )}
     </div>
