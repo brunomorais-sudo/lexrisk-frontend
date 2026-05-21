@@ -185,7 +185,7 @@ export default function ProcessDetailPage() {
       parts.push(`\n\nDOCUMENTOS IMPORTADOS (${docsComTexto.length} arquivo(s)):`);
       docsComTexto.forEach(d => {
         parts.push(`\n--- ${d.file_name} ---`);
-        parts.push(d.extracted_text!.substring(0, 8000)); // limita por doc para não estourar contexto
+        parts.push(d.extracted_text!.substring(0, 8000));
       });
     }
     return parts.join('\n');
@@ -438,6 +438,7 @@ export default function ProcessDetailPage() {
           <TabsTrigger value="visao-geral" className="text-xs">Visão Geral</TabsTrigger>
           <TabsTrigger value="timeline" className="text-xs">Linha do Tempo</TabsTrigger>
           <TabsTrigger value="documentos" className="text-xs">Documentos</TabsTrigger>
+          <TabsTrigger value="documentos-upload" className="text-xs">Upload</TabsTrigger>
           <TabsTrigger value="provas" className="text-xs">Provas</TabsTrigger>
           <TabsTrigger value="pros-contras" className="text-xs">Prós e Contras</TabsTrigger>
           <TabsTrigger value="jurisprudencia" className="text-xs">Análise Jurídica</TabsTrigger>
@@ -595,39 +596,40 @@ export default function ProcessDetailPage() {
 
         {/* TAB: Documentos */}
         <TabsContent value="documentos">
-          {process.id && !mockProcess ? (
-            <DocumentosTab
-              processId={process.id}
-              processNumber={process.process_number}
-            />
-          ) : (
-            <div className="rounded-xl border bg-card p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="section-title">Documentos do Processo</h3>
-              </div>
-              {documents.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum documento.</p> : (
-                <div className="space-y-3">
-                  {documents.map(doc => (
-                    <div key={doc.id} className="rounded-lg border p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{doc.title}</p>
-                          <p className="text-xs text-muted-foreground">{doc.document_type.replace(/_/g, ' ')} • {doc.mime_type}</p>
-                        </div>
-                        <Button size="sm" variant="ghost"><Download className="h-4 w-4" /></Button>
-                      </div>
-                      {doc.extracted_text && (
-                        <div className="mt-3 rounded-lg bg-muted p-3">
-                          <p className="text-xs font-medium text-muted-foreground mb-1">Texto extraído:</p>
-                          <p className="text-xs text-foreground/80 line-clamp-4">{doc.extracted_text}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div className="rounded-xl border bg-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="section-title">Documentos do Processo</h3>
+              {!isClient && <Button size="sm" variant="outline" className="gap-2"><FileText className="h-4 w-4" /> Upload</Button>}
             </div>
-          )}
+            {documents.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum documento.</p> : (
+              <div className="space-y-3">
+                {documents.map(doc => (
+                  <div key={doc.id} className="rounded-lg border p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{doc.title}</p>
+                        <p className="text-xs text-muted-foreground">{doc.document_type.replace(/_/g, ' ')} • {doc.mime_type}</p>
+                      </div>
+                      <Button size="sm" variant="ghost"><Download className="h-4 w-4" /></Button>
+                    </div>
+                    {doc.extracted_text && (
+                      <div className="mt-3 rounded-lg bg-muted p-3">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">Texto extraído:</p>
+                        <p className="text-xs text-foreground/80 line-clamp-4">{doc.extracted_text}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="documentos-upload">
+          <DocumentosTab
+            processId={id || ''}
+            {...processDocumentos}
+          />
         </TabsContent>
 
         {/* TAB: Provas */}
@@ -715,20 +717,7 @@ export default function ProcessDetailPage() {
                         <span className="text-xs text-muted-foreground">Peso: {con.weight}/10</span>
                         <div className="flex-1 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-risk-high" style={{ width: `${con.weight * 10}%` }} /></div>
                       </div>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Relevância: {con.relevance_score}/10</span>
-                        <div className="flex-1 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-risk-high" style={{ width: `${con.relevance_score * 10}%` }} /></div>
-                      </div>
                     </motion.div>
-                  ))}
-                  {(analysis.cons || []).length === 0 && <p className="text-sm text-muted-foreground">Nenhum contra identificado.</p>}
-                </div>
-              </div>
-            </div>
-          )}
-        </TabsContent>
-
-             </motion.div>
                   ))}
                   {(analysis.cons || []).length === 0 && <p className="text-sm text-muted-foreground">Nenhum contra identificado.</p>}
                 </div>
@@ -1039,10 +1028,17 @@ export default function ProcessDetailPage() {
                   </div>
                 </div>
                 <div className="rounded-lg border p-3 flex items-center gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-risk-low" />
+                  <FileText className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">Revisão humana: Aprovado</p>
-                    <p className="text-xs text-muted-foreground">Confiança confirmada pela analista</p>
+                    <p className="text-sm font-medium">Documentos enviados (4 arquivos)</p>
+                    <p className="text-xs text-muted-foreground">por Dra. Camila Ferreira</p>
+                  </div>
+                </div>
+                <div className="rounded-lg border p-3 flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Processo criado</p>
+                    <p className="text-xs text-muted-foreground">por Dra. Camila Ferreira</p>
                   </div>
                 </div>
               </div>
@@ -1050,18 +1046,12 @@ export default function ProcessDetailPage() {
           </TabsContent>
         )}
 
-        {/* TAB: PJe / Andamentos */}
+        {/* TAB: PJe / Andamentos (DataJud CNJ — 1º e 2º grau) */}
         <TabsContent value="pje">
           {process.id && !mockProcess ? (
             <PjeTab processId={process.id} processNumber={process.process_number} />
           ) : (
-            <div className="rounded-xl border bg-card p-5">
-              <h3 className="section-title mb-1">Consulta DataJud (CNJ)</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Importe andamentos oficiais diretamente da API pública do CNJ.
-              </p>
-              <DataJudTab initialNumber={process.process_number} />
-            </div>
+            <DataJudTab initialNumber={process.process_number} />
           )}
         </TabsContent>
       </Tabs>
