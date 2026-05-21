@@ -1,10 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
-import formidable from 'formidable';
-import fs from 'fs';
-import path from 'path';
 
-export const config = { api: { bodyParser: false } };
+// Sem bodyParser customizado — recebe JSON pequeno (apenas metadados)
+export const config = { api: { bodyParser: true } };
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -13,7 +11,6 @@ const supabase = createClient(
 
 async function extractTextFromPdf(buffer: Buffer): Promise<string> {
   try {
-    // Usa pdf-parse para extração
     const pdfParse = await import('pdf-parse');
     const data = await pdfParse.default(buffer);
     return data.text?.trim() || '';
@@ -23,61 +20,47 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const form = formidable({ maxFileSize: 20 * 1024 * 1024 }); // 20MB
-    const [fields, files] = await form.parse(req);
+    const { process_id, storage_path, file_name, file_size, mime_type, uploaded_by } = req.body;
 
-    const processId = Array.isArray(fields.process_id) ? fields.process_id[0] : fields.process_id;
-    const uploadedBy = Array.isArray(fields.uploaded_by) ? fields.uploaded_by[0] : fields.uploaded_by;
+    if (!process_id) return res.status(400).json({ error: 'process_id obrigatório' });
+    if (!storage_path) return res.status(400).json({ error: 'storage_path obrigatório' });
 
-    if (!processId) return res.status(400).json({ error: 'process_id obrigatório' });
-
-    const fileArray = files.file;
-    if (!fileArray || fileArray.length === 0) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-
-    const file = fileArray[0];
-    const buffer = fs.readFileSync(file.filepath);
-    const fileName = file.originalFilename || 'documento';
-    const mimeType = file.mimetype || 'application/octet-stream';
-    const fileSize = file.size;
-
-    // Extrai texto se for PDF
+    // Baixa arquivo do Storage para extrair texto
     let extractedText = '';
-    if (mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
-      extractedText = await extractTextFromPdf(buffer);
+    const isPdf = mime_type === 'application/pdf' || (file_name || '').toLowerCase().endsWith('.pdf');
+
+    if (isPdf) {
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('documents')
+        .download(storage_path);
+
+      if (!downloadError && fileData) {
+        const arrayBuffer = await fileData.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        extractedText = await extractTextFromPdf(buffer);
+      }
     }
-
-    // Salva no Supabase Storage
-    const storagePath = `process-docs/${processId}/${Date.now()}-${fileName}`;
-    const { error: storageError } = await supabase.storage
-      .from('documents')
-      .upload(storagePath, buffer, { contentType: mimeType, upsert: false });
-
-    // Se storage falhar, continua sem salvar o arquivo binário (salva só o texto)
-    const finalStoragePath = storageError ? null : storagePath;
 
     // Registra na tabela process_documents
     const { data, error } = await supabase
       .from('process_documents')
       .insert({
-        process_id: processId,
+        process_id,
         document_type: 'upload_usuario',
-        file_name: fileName,
-        file_size: fileSize,
-        mime_type: mimeType,
-        storage_path: finalStoragePath,
+        file_name: file_name || 'documento',
+        file_size: file_size || null,
+        mime_type: mime_type || 'application/octet-stream',
+        storage_path,
         extracted_text: extractedText || null,
-        uploaded_by: uploadedBy || null,
+        uploaded_by: uploaded_by || null,
         fetched_at: new Date().toISOString(),
       })
       .select()
@@ -88,17 +71,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Erro ao salvar documento no banco' });
     }
 
-    // Limpa arquivo temporário
-    try { fs.unlinkSync(file.filepath); } catch { /* ignore */ }
-
     return res.status(200).json({
       id: data.id,
-      file_name: fileName,
-      file_size: fileSize,
-      mime_type: mimeType,
+      file_name,
+      file_size,
+      mime_type,
       extracted_text_length: extractedText.length,
       has_text: extractedText.length > 0,
-      storage_path: finalStoragePath,
+      storage_path,
     });
 
   } catch (err) {
