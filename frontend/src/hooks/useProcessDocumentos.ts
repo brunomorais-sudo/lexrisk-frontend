@@ -53,14 +53,26 @@ export function useProcessDocumentos(processId: string) {
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('process_id', processId);
-      if (user?.id) formData.append('uploaded_by', user.id);
+      // 1. Upload direto para Supabase Storage (sem passar pelo Vercel — sem limite de tamanho)
+      const storagePath = `process-docs/${processId}/${Date.now()}-${file.name}`;
+      const { error: storageError } = await supabase.storage
+        .from('documents')
+        .upload(storagePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
 
+      if (storageError) throw new Error(`Erro no storage: ${storageError.message}`);
+
+      // 2. Notifica API para extrair texto e registrar no banco
       const resp = await fetch('/api/upload-documento', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          process_id: processId,
+          storage_path: storagePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type || 'application/octet-stream',
+          uploaded_by: user?.id || null,
+        }),
       });
 
       if (!resp.ok) {
